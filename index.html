@@ -1,0 +1,116 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>CricScore</title><meta name="theme-color" content="#0b6e4f">
+<style>
+:root{--bg:#eef1ef;--c:#fff;--t:#14201b;--m:#66736d;--g:#0b6e4f;--b:#d9e0dc;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#101413;--c:#1a201e;--t:#e8efeb;--m:#8f9c96;--b:#2c3531}}
+:root[data-theme="dark"]{--bg:#101413;--c:#1a201e;--t:#e8efeb;--m:#8f9c96;--b:#2c3531}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--t);font:15px system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+#app{max-width:560px;margin:auto;padding:10px}
+.top{background:var(--g);color:#fff;padding:12px 14px;border-radius:12px;margin-bottom:10px}
+.top h1{margin:0;font-size:18px}.top small{opacity:.85}
+.card{background:var(--c);border:1px solid var(--b);border-radius:12px;padding:12px;margin-bottom:10px}
+.big{font-size:28px;font-weight:700}.m{color:var(--m);font-size:13px}
+input,select,textarea,button{font:inherit;color:var(--t);background:var(--c);border:1px solid var(--b);border-radius:8px;padding:10px}
+input,select,textarea{width:100%;margin:4px 0}
+button{cursor:pointer}button.p{background:var(--g);color:#fff;border-color:var(--g)}button.on{background:var(--g);color:#fff}
+.row{display:flex;gap:6px;margin:6px 0;flex-wrap:wrap}.row>*{flex:1;min-width:44px}
+.runs button{font-size:20px;font-weight:700;padding:14px 0}
+.tabs{display:flex;border-bottom:2px solid var(--b);margin-bottom:10px}.tabs button{flex:1;border:0;border-radius:0;background:none;font-weight:600;color:var(--m)}.tabs .on{color:var(--g);background:none;border-bottom:3px solid var(--g)}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:6px 4px;text-align:right;border-bottom:1px solid var(--b)}th:first-child,td:first-child{text-align:left}
+.ball{display:inline-block;min-width:30px;text-align:center;padding:5px;margin:2px;border-radius:50%;border:1px solid var(--b);font-weight:600;font-size:13px}
+.w{background:#c62828;color:#fff}.f{background:#1565c0;color:#fff}.s{background:#6a1b9a;color:#fff}.e{background:#ef6c00;color:#fff}
+.live{color:#d32f2f;font-weight:700;font-size:12px}.err{color:#d32f2f;font-size:13px}
+.need{border:2px solid #d32f2f}.dim{opacity:.5}</style></head><body><div id="app"></div>
+<script>
+let db=null,M={},cur=null,tab='live',mod='',wk=false,rt=false,err='',canW=true,pend=0,hold=0,dirty=false,pw0={k:'bowled',who:'s',r:0,nb:'',rw:'s',rk:'retired hurt',rnb:''},pw=Object.assign({},pw0),PM={wkk:'k',wko:'who',wkr:'r',nb:'nb',rw:'rw',rk:'rk',rnb:'rnb'};
+const $=s=>document.querySelector(s),esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const ovs=n=>Math.floor(n/6)+'.'+n%6;
+const last=m=>m.inn[m.inn.length-1],tn=(m,i)=>i.bat?m.b:m.a;
+function lab(b){return b.k?'W':b.x==='wd'?'Wd'+(b.er>1?b.er-1:''):b.x==='nb'?'Nb'+(b.r||''):b.x==='b'?'B'+b.er:b.x==='lb'?'LB'+b.er:b.r}
+function calc(i){let R=0,W=0,L=0,ex=0;const bat={},bowl={},overs=[];
+ i.balls.forEach(b=>{if(b.z){const p=bat[b.o]=bat[b.o]||{r:0,b:0,f:0,x:0,out:''};p.out=b.k;if(b.k==='retired out')W++;return}R+=b.r+b.er;ex+=b.x?b.er:0;const leg=b.x!=='wd'&&b.x!=='nb';
+  [b.s,b.n].forEach(n=>{const q0=bat[n]=bat[n]||{r:0,b:0,f:0,x:0,out:''};if(q0.out==='retired hurt')q0.out=''});
+  const p=bat[b.s];if(b.x!=='wd')p.b++;p.r+=b.r;if(b.r===4)p.f++;if(b.r===6)p.x++;
+  const q=bowl[b.bw]=bowl[b.bw]||{l:0,r:0,w:0};q.r+=b.r+(b.x==='wd'||b.x==='nb'?b.er:0);
+  const oi=Math.floor(L/6);(overs[oi]=overs[oi]||{bw:b.bw,r:0,b:[]}).b.push(b);overs[oi].r+=b.r+b.er;
+  if(leg){L++;q.l++}
+  if(b.k){W++;const po=bat[b.o||b.s];po.out=b.k==='run out'?'run out':b.k+' b '+b.bw;if(b.k!=='run out')q.w++}});
+ return{R,W,L,ex,bat,bowl,overs}}
+function status(m){const c=m.inn.map(calc);
+ if(m.inn.length<2)return m.done?'Match ended':'';
+ const t=c[0].R+1,r=c[1];
+ if(r.R>=t)return tn(m,m.inn[1])+' won by '+(10-r.W)+' wkts';
+ if(m.done||r.L>=m.ov*6||r.W>=10)return c[0].R===r.R?'Match tied':tn(m,m.inn[0])+' won by '+(c[0].R-r.R)+' runs';
+ return tn(m,m.inn[1])+' need '+(t-r.R)+' off '+(m.ov*6-r.L)+' balls'}
+function save(){try{localStorage.setItem('cricscore',JSON.stringify(M))}catch(x){err='Phone storage full'}}
+function add(o){const m=M[cur],i=last(m);
+ if(!m.s||!m.n||!m.bw){err='Enter striker, non-striker and bowler first';return render()}
+ if(o.k&&!o.nb&&calc(i).W+1<10){err='Select the new batsman';return render()}
+ err='';const b=Object.assign({s:m.s,n:m.n,bw:m.bw,x:'',r:0,er:0,k:'',o:''},o);delete b.nb;
+ const odd=(b.r+(b.x==='b'||b.x==='lb'?b.er:0)+(b.x==='wd'?b.er-1:0))%2;
+ if(odd)[m.s,m.n]=[m.n,m.s];
+ if(b.k){if(m.s===b.o)m.s=o.nb||'';else if(m.n===b.o)m.n=o.nb||''}
+ i.balls.push(b);const L=calc(i).L;
+ if(b.x!=='wd'&&b.x!=='nb'&&L%6===0){[m.s,m.n]=[m.n,m.s];m.bw=''}
+ mod='';wk=false;rt=false;pw=Object.assign({},pw0);save();render()}
+const mk=n=>mod==='wd'?{x:'wd',er:1+n}:mod==='nb'?{x:'nb',er:1,r:n}:mod==='b'||mod==='lb'?{x:mod,er:n}:{r:n};
+const sq=(m,k)=>(k?m.sqb:m.sqa)||[],pl=s=>$(s).value.split('\n').map(x=>x.trim()).filter(Boolean);
+function pick0(at,ph,l,v,dis){if(!l.length)return`<input ${at} placeholder="${ph}" value="${esc(v)}">`;
+ return`<select ${at}><option value="">${ph}</option>${l.filter(n=>n===v||!dis.includes(n)).map(n=>`<option${n===v?' selected':''}>${esc(n)}</option>`).join('')}</select>`}
+const pick=(at,ph,l,v,d)=>'<div class="m" style="margin-top:4px">'+ph+'</div>'+pick0(at,ph,l,v,d);
+function yb(m,i,c){const l=sq(m,i.bat).filter(n=>!c.bat[n]&&!(i===last(m)&&(n===m.s||n===m.n)));return l.length?'<div class="m">Yet to bat: '+l.map(esc).join(', ')+'</div>':''}
+function retire(w,k,nb){const m=M[cur],i=last(m);if(!m[w]||!nb){err='Choose who retires and the new batsman';return render()}
+ err='';i.balls.push({z:1,k,o:m[w],s:m.s,n:m.n,bw:m.bw,x:'',r:0,er:0});m[w]=nb;rt=false;pw=Object.assign({},pw0);save();render()}
+function home(){const l=Object.entries(M).sort((a,b)=>b[1].t-a[1].t).map(([id,m])=>{
+ const sc=m.inn.map(i=>{const c=calc(i);return`<div><b>${esc(tn(m,i))}</b> <span class="big" style="font-size:20px">${c.R}/${c.W}</span> <span class="m">(${ovs(c.L)})</span></div>`}).join('');
+ return`<div class="card" data-a="open" data-v="${id}" style="cursor:pointer"><span class="live">${m.done?'':'● LIVE'}</span> <span class="m">${esc(m.a)} vs ${esc(m.b)} · ${m.ov} ov</span>${sc}<div class="m">${esc(status(m))}</div></div>`}).join('');
+ return`<div class="top"><h1>🏏 CricScore</h1><small>Saved on this phone · works offline</small></div>
+ ${canW?`<div class="card"><b>New match</b><input id="ta" placeholder="Team A"><textarea id="pa" rows="3" placeholder="Team A players, one per line (optional)"></textarea><input id="tb" placeholder="Team B"><textarea id="pb" rows="3" placeholder="Team B players, one per line (optional)"></textarea><div class="row"><input id="ov" type="number" min="1" max="50" value="20" placeholder="Overs"><select id="bf"><option value="0">Team A bats first</option><option value="1">Team B bats first</option></select></div><button class="p" data-a="new" style="width:100%">Start match</button><div class="err">${esc(err)}</div></div>`:''}
+ ${l||'<p class="m" style="text-align:center">No matches yet.</p>'}`}
+function scoreTab(m){const i=last(m),c=calc(i),over=c.overs[Math.floor(c.L/6)];
+ const fin=c.L>=m.ov*6||c.W>=10||!!status(m).match(/won|tied/);
+ const chips=(over?over.b:[]).map(b=>`<span class="ball ${b.k?'w':b.r===4&&!b.x?'f':b.r===6&&!b.x?'s':b.x?'e':''}">${lab(b)}</span>`).join('');
+ const st=c.bat[m.s],nst=c.bat[m.n],bl=sq(m,i.bat),fl=sq(m,1-i.bat),gone=Object.entries(c.bat).filter(([n,p])=>p.out&&p.out!=='retired hurt').map(x=>x[0]),miss=[!m.s&&'striker',!m.n&&'non-striker',!m.bw&&(c.L>0&&c.L%6===0?'next bowler':'bowler')].filter(Boolean);
+ if(m.done||!canW)return`<div class="card">${chips||'<span class="m">Waiting for the next ball…</span>'}<div>${st?esc(m.s)+'* '+st.r+'('+st.b+')':''} ${nst?' · '+esc(m.n)+' '+nst.r+'('+nst.b+')':''}</div><div class="m">${m.bw?'Bowler: '+esc(m.bw):''}</div></div>`;
+ if(fin)return`<div class="card"><b>${m.inn.length<2?'Innings complete':esc(status(m))}</b><div class="row">${m.inn.length<2?'<button class="p" data-a="inn">Start 2nd innings</button>':'<button class="p" data-a="end">Finish match</button>'}<button data-a="undo">Undo last ball</button></div></div>`;
+ return`<div class="card"><div style="margin-bottom:6px"><b>🏏 ${esc(m.s)||'—'}*</b> ${st?st.r+' ('+st.b+')':''} &nbsp;|&nbsp; ${esc(m.n)||'—'} ${nst?nst.r+' ('+nst.b+')':''}<div class="m">⚾ ${esc(m.bw)||'—'} ${c.bowl[m.bw]?ovs(c.bowl[m.bw].l)+'-'+c.bowl[m.bw].r+'-'+c.bowl[m.bw].w:''}</div></div>${pick('data-f="s"'+(m.s?'':' class="need"'),'Striker (on strike)',bl,m.s,[...gone,m.n])}${pick('data-f="n"'+(m.n?'':' class="need"'),'Non-striker',bl,m.n,[...gone,m.s])}${pick('data-f="bw"'+(m.bw?'':' class="need"'),'Bowler (this over)',fl,m.bw,[])}
+ <div class="m" style="margin-top:6px">This over:</div><div>${chips||'—'}</div>${miss.length?'<div class="err"><b>Select '+miss.join(', ')+' to continue scoring</b></div>':''}<div class="err">${esc(err)}</div>
+ <div class="row">${[['','Runs'],['wd','Wide'],['nb','No ball'],['b','Bye'],['lb','Leg bye']].map(([k,t])=>`<button class="${mod===k?'on':''}" data-a="mod" data-v="${k}">${t}</button>`).join('')}</div>
+ <div class="row runs${miss.length?' dim':''}">${[0,1,2,3,4,5,6].map(n=>`<button data-a="run" data-v="${n}">${n}</button>`).join('')}</div>
+ <div class="row"><button class="w" data-a="wk">OUT</button><button data-a="rt">Retire</button><button data-a="swap">⇄ Swap</button><button data-a="undo">Undo</button></div>
+ ${wk?`<div class="row"><select id="wkk">${['bowled','caught','lbw','run out','stumped','hit wicket'].map(k=>`<option${pw.k===k?' selected':''}>${k}</option>`).join('')}</select><select id="wko"><option value="s"${pw.who==='s'?' selected':''}>Out: ${esc(m.s)||'striker'}</option><option value="n"${pw.who==='n'?' selected':''}>Out: ${esc(m.n)||'non-striker'}</option></select><select id="wkr">${[0,1,2,3].map(n=>`<option value="${n}"${+pw.r===n?' selected':''}>Runs run: ${n}</option>`).join('')}</select></div><div class="row">${pick('id="nb"','New batsman',bl,pw.nb,[...gone,m.s,m.n])}<button class="p" data-a="wkc">Confirm OUT</button></div>`:''}${rt?`<div class="row"><select id="rw"><option value="s"${pw.rw==='s'?' selected':''}>${esc(m.s)||'Striker'} (striker)</option><option value="n"${pw.rw==='n'?' selected':''}>${esc(m.n)||'Non-striker'} (non-striker)</option></select><select id="rk">${['retired hurt','retired out'].map(k=>`<option${pw.rk===k?' selected':''}>${k}</option>`).join('')}</select>${pick('id="rnb"','New batsman',bl,pw.rnb,[...gone,m.s,m.n])}<button class="p" data-a="rtc">Confirm</button></div>`:''}</div>`}
+function cardTab(m){return m.inn.map(i=>{const c=calc(i);
+ return`<div class="card"><b>${esc(tn(m,i))}</b> — ${c.R}/${c.W} (${ovs(c.L)} ov)
+ <table><tr><th>Batter</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th></tr>${Object.entries(c.bat).map(([n,p])=>`<tr><td>${esc(n)}<div class="m">${p.out||'batting'}</div></td><td><b>${p.r}</b></td><td>${p.b}</td><td>${p.f}</td><td>${p.x}</td><td>${p.b?(p.r*100/p.b).toFixed(0):'-'}</td></tr>`).join('')}</table>
+ <div class="m">Extras: ${c.ex}</div>${yb(m,i,c)}
+ <table><tr><th>Bowler</th><th>O</th><th>R</th><th>W</th><th>Eco</th></tr>${Object.entries(c.bowl).map(([n,q])=>`<tr><td>${esc(n)}</td><td>${ovs(q.l)}</td><td>${q.r}</td><td><b>${q.w}</b></td><td>${q.l?(q.r*6/q.l).toFixed(1):'-'}</td></tr>`).join('')}</table></div>`}).join('')}
+function overTab(m){return m.inn.map(i=>{const c=calc(i);let t=0;
+ return`<div class="card"><b>${esc(tn(m,i))}</b>${c.overs.map((o,k)=>{t+=o.r;return`<div style="margin-top:8px"><span class="m">Over ${k+1} · ${esc(o.bw)} · ${o.r} runs (total ${t})</span><div>${o.b.map(b=>`<span class="ball ${b.k?'w':b.r===4&&!b.x?'f':b.r===6&&!b.x?'s':b.x?'e':''}">${lab(b)}</span>`).join('')}</div></div>`}).join('')||'<div class="m">No balls yet</div>'}</div>`}).join('')}
+function render(){const a=$('#app');if(!cur||!M[cur]){cur=null;a.innerHTML=home();return}
+ const m=M[cur],i=last(m),c=calc(i);
+ a.innerHTML=`<div class="top"><button data-a="back" style="padding:4px 10px">←</button> <small>${esc(m.a)} vs ${esc(m.b)} · ${m.ov} ov</small><div class="big">${esc(tn(m,i))} ${c.R}/${c.W}</div><small>Overs ${ovs(c.L)}${c.L?' · CRR '+(c.R*6/c.L).toFixed(2):''}</small><div><small>${esc(status(m))}</small></div></div>
+ <div class="tabs">${[['live','Live'],['card','Scorecard'],['over','Overs']].map(([k,t])=>`<button class="${tab===k?'on':''}" data-a="tab" data-v="${k}">${t}</button>`).join('')}</div>${tab==='live'?scoreTab(m):tab==='card'?cardTab(m):overTab(m)}`}
+$('#app').addEventListener('click',e=>{const t=e.target.closest('[data-a]');if(!t)return;const a=t.dataset.a,v=t.dataset.v,m=M[cur];
+ if(m)document.querySelectorAll('#app [data-f]').forEach(el=>{m[el.dataset.f]=el.value});
+ if(a==='open'){cur=v;tab='live';err='';render()}
+ else if(a==='back'){cur=null;render()}
+ else if(a==='tab'){tab=v;render()}
+ else if(a==='new'){const A=$('#ta').value.trim(),B=$('#tb').value.trim(),o=+$('#ov').value;
+  if(!A||!B||!(o>0)){err='Enter both team names and overs';return render()}
+  err='';const id='m'+Date.now(),f=+$('#bf').value;M[id]={sqa:pl('#pa'),sqb:pl('#pb'),a:A,b:B,ov:o,t:Date.now(),inn:[{bat:f,balls:[]}],s:'',n:'',bw:'',done:false};cur=id;tab='live';save();render()}
+ else if(a==='mod'){mod=v;render()}
+ else if(a==='run'){const n=+v;add(mk(n))}
+ else if(a==='wk'){wk=!wk;rt=false;pw=Object.assign({},pw0);render()}
+ else if(a==='rt'){rt=!rt;wk=false;pw=Object.assign({},pw0);render()}
+ else if(a==='rtc'){retire($('#rw').value,$('#rk').value,$('#rnb').value.trim())}
+ else if(a==='wkc'){{const out=$('#wko').value==='n'?m.n:m.s;add(Object.assign({k:$('#wkk').value,o:out,nb:$('#nb').value.trim()},mk(+$('#wkr').value)))}}
+ else if(a==='swap'){[m.s,m.n]=[m.n,m.s];save();render()}
+ else if(a==='undo'){const i=last(m),b=i.balls.pop();if(b){m.s=b.s;m.n=b.n;m.bw=b.bw;m.done=false;save()}render()}
+ else if(a==='inn'){m.inn.push({bat:1-m.inn[0].bat,balls:[]});m.s=m.n=m.bw='';save();render()}
+ else if(a==='end'){m.done=true;save();render()}});
+$('#app').addEventListener('input',e=>{const id=e.target.id;if(id&&PM[id]){pw[PM[id]]=e.target.value;return}const f=e.target.dataset.f;if(f&&M[cur]){M[cur][f]=e.target.value;save()}});
+$('#app').addEventListener('change',e=>{if(e.target.tagName==='SELECT'&&e.target.dataset.f){err='';render()}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)save()});window.addEventListener('pagehide',()=>save());
+try{M=JSON.parse(localStorage.getItem('cricscore')||'{}')}catch(x){M={}}
+render();
+</script></body></html>
