@@ -94,7 +94,7 @@ async function exportPdf(){const m=M[cur];if(!m)return;
   const r=await P.Filesystem.writeFile({path:name,data:btoa(b),directory:'CACHE'});await P.Share.share({title:name,url:r.uri,dialogTitle:'Save or share scorecard'})}
   catch(e){const t=String(e&&e.message||e);if(!/cancel/i.test(t)){err='PDF failed: '+t;render()}}return}
  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500)}
-let PL=[],sel={a:[],b:[]},fd={ta:'',tb:'',ov:'20',bf:'0',pa:'',pb:''},showPL=false;
+let PL=[],sel={a:[],b:[]},fd={ta:'',tb:'',ov:'20',bf:'0',pa:'',pb:''},showPL=false,delAsk='';
 const srt=()=>[...PL].sort((x,y)=>x.localeCompare(y)),canon=n=>PL.find(p=>p.toLowerCase()===n.toLowerCase())||n;
 function savePL(){try{localStorage.setItem('cricscore_players',JSON.stringify(PL))}catch(x){}}
 function addPL(l){l.forEach(n=>{n=n.trim();if(n&&!PL.some(p=>p.toLowerCase()===n.toLowerCase()))PL.push(n)});savePL()}
@@ -109,10 +109,10 @@ function retire(w,k,nb){const m=M[cur],i=last(m);if(!m[w]||!nb){err='Choose who 
  err='';i.balls.push({z:1,k,o:m[w],s:m.s,n:m.n,bw:m.bw,x:'',r:0,er:0});m[w]=nb;rt=false;pw=Object.assign({},pw0);save();render()}
 function home(){const l=Object.entries(M).sort((a,b)=>b[1].t-a[1].t).map(([id,m])=>{
  const sc=m.inn.map(i=>{const c=calc(i);return`<div><b>${esc(tn(m,i))}</b> <span class="big" style="font-size:20px">${c.R}/${c.W}</span> <span class="m">(${ovs(c.L)})</span></div>`}).join('');
- return`<div class="card" data-a="open" data-v="${id}" style="cursor:pointer"><span class="live">${m.done?'':'● LIVE'}</span> <span class="m">${esc(m.a)} vs ${esc(m.b)} · ${m.ov} ov</span>${sc}<div class="m">${esc(status(m))}</div></div>`}).join('');
+ return`<div class="card" data-a="open" data-v="${id}" style="cursor:pointer"><span class="live">${m.done?'':'● LIVE'}</span> <span class="m">${esc(m.a)} vs ${esc(m.b)} · ${m.ov} ov</span>${sc}<div class="m">${esc(status(m))}</div><div style="text-align:right;margin-top:6px"><button data-a="del" data-v="${id}" style="padding:5px 12px;${delAsk===id?'background:#c62828;color:#fff;border-color:#c62828':''}">${delAsk===id?'Tap again to delete':'🗑 Delete'}</button></div></div>`}).join('');
  return`<div class="top"><h1>🏏 CricScore</h1><small>Saved on this phone · works offline</small></div>
  ${canW?`${plPanel()}<div class="card"><b>New match</b><input id="ta" placeholder="Team A" value="${esc(fd.ta)}">${squadPick('a')}<textarea id="pa" rows="2" placeholder="New players for Team A (one per line) - also saved to your list">${esc(fd.pa)}</textarea><input id="tb" placeholder="Team B" value="${esc(fd.tb)}">${squadPick('b')}<textarea id="pb" rows="2" placeholder="New players for Team B (one per line) - also saved to your list">${esc(fd.pb)}</textarea><div class="row"><input id="ov" type="number" min="1" max="50" value="${esc(fd.ov)}" placeholder="Overs"><select id="bf"><option value="0"${fd.bf==='1'?'':' selected'}>Team A bats first</option><option value="1"${fd.bf==='1'?' selected':''}>Team B bats first</option></select></div><button class="p" data-a="new" style="width:100%">Start match</button><div class="err">${esc(err)}</div></div>`:''}
- ${l||'<p class="m" style="text-align:center">No matches yet.</p>'}`}
+ ${l||'<p class="m" style="text-align:center">No matches yet.</p>'}${l?`<button data-a="delall" style="width:100%;margin-top:4px;${delAsk==='all'?'background:#c62828;color:#fff;border-color:#c62828':''}">${delAsk==='all'?'Tap again to delete ALL matches':'🗑 Delete all matches'}</button><div class="m" style="text-align:center;margin-top:4px">Your players list is kept.</div>`:''}`}
 function scoreTab(m){const i=last(m),c=calc(i),over=c.overs[Math.floor(c.L/6)];
  const fin=c.L>=m.ov*6||c.W>=10||!!status(m).match(/won|tied/);
  const chips=(over?over.b:[]).map(b=>`<span class="ball ${b.k?'w':b.r===4&&!b.x?'f':b.r===6&&!b.x?'s':b.x?'e':''}">${lab(b)}</span>`).join('');
@@ -136,7 +136,7 @@ function render(){const a=$('#app');if(!cur||!M[cur]){cur=null;a.innerHTML=home(
  const m=M[cur],i=last(m),c=calc(i);
  a.innerHTML=`<div class="top"><button data-a="back" style="padding:4px 10px">←</button><button data-a="pdf" style="padding:4px 10px;float:right">⬇ PDF</button> <small>${esc(m.a)} vs ${esc(m.b)} · ${m.ov} ov</small><div class="big">${esc(tn(m,i))} ${c.R}/${c.W}</div><small>Overs ${ovs(c.L)}${c.L?' · CRR '+(c.R*6/c.L).toFixed(2):''}</small><div><small>${esc(status(m))}</small></div></div>
  <div class="tabs">${[['live','Live'],['card','Scorecard'],['over','Overs']].map(([k,t])=>`<button class="${tab===k?'on':''}" data-a="tab" data-v="${k}">${t}</button>`).join('')}</div>${tab==='live'?scoreTab(m):tab==='card'?cardTab(m):overTab(m)}`}
-$('#app').addEventListener('click',e=>{const t=e.target.closest('[data-a]');if(!t)return;const a=t.dataset.a,v=t.dataset.v,m=M[cur];
+$('#app').addEventListener('click',e=>{const t=e.target.closest('[data-a]');if(!t)return;const a=t.dataset.a,v=t.dataset.v,m=M[cur];if(a!=='del'&&a!=='delall')delAsk='';
  if(m)document.querySelectorAll('#app [data-f]').forEach(el=>{m[el.dataset.f]=el.value});
  if(a==='open'){cur=v;tab='live';err='';render()}
  else if(a==='back'){cur=null;render()}
@@ -154,6 +154,8 @@ $('#app').addEventListener('click',e=>{const t=e.target.closest('[data-a]');if(!
  else if(a==='undo'){const i=last(m),b=i.balls.pop();if(b){m.s=b.s;m.n=b.n;m.bw=b.bw;m.done=false;save()}render()}
  else if(a==='inn'){m.inn.push({bat:1-m.inn[0].bat,balls:[]});m.s=m.n=m.bw='';save();render()}
  else if(a==='pdf'){exportPdf()}
+ else if(a==='del'){if(delAsk===v){delete M[v];save();delAsk=''}else delAsk=v;render()}
+ else if(a==='delall'){if(delAsk==='all'){M={};save();delAsk=''}else delAsk='all';render()}
  else if(a==='ptog'){showPL=!showPL;render()}
  else if(a==='padd'){addPL($('#np').value.split(/[\n,]/));render()}
  else if(a==='pdel'){PL=PL.filter(n=>n!==v);sel.a=sel.a.filter(n=>n!==v);sel.b=sel.b.filter(n=>n!==v);savePL();render()}
