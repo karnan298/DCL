@@ -94,12 +94,23 @@ async function exportPdf(){const m=M[cur];if(!m)return;
   const r=await P.Filesystem.writeFile({path:name,data:btoa(b),directory:'CACHE'});await P.Share.share({title:name,url:r.uri,dialogTitle:'Save or share scorecard'})}
   catch(e){const t=String(e&&e.message||e);if(!/cancel/i.test(t)){err='PDF failed: '+t;render()}}return}
  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500)}
-let PL=[],sel={a:[],b:[]},fd={ta:'',tb:'',ov:'20',bf:'0',pa:'',pb:''},showPL=false,delAsk='';
+let PL=[],sel={a:[],b:[]},fd={ta:'',tb:'',ov:'20',bf:'0',pa:'',pb:''},showPL=false,delAsk='',showBK=false,bkMsg='';
 const srt=()=>[...PL].sort((x,y)=>x.localeCompare(y)),canon=n=>PL.find(p=>p.toLowerCase()===n.toLowerCase())||n;
 function savePL(){try{localStorage.setItem('cricscore_players',JSON.stringify(PL))}catch(x){}}
 function addPL(l){l.forEach(n=>{n=n.trim();if(n&&!PL.some(p=>p.toLowerCase()===n.toLowerCase()))PL.push(n)});savePL()}
 const plPanel=()=>`<div class="card"><div class="row" style="align-items:center"><b style="flex:3">👥 Players list (${PL.length})</b><button data-a="ptog">${showPL?'Hide':'Manage'}</button></div>${showPL?`<textarea id="np" rows="3" placeholder="Add players: one per line or comma separated"></textarea><button class="p" data-a="padd" style="width:100%">Add to list</button><div style="margin-top:8px">${srt().map(n=>`<span class="chip">${esc(n)} <b data-a="pdel" data-v="${esc(n)}">×</b></span>`).join('')||'<span class="m">No players yet</span>'}</div>`:''}</div>`;
 const squadPick=t=>{const o=t==='a'?'b':'a';return PL.length?`<div class="pl">${srt().map(n=>`<label class="pc"><input type="checkbox" data-t="${t}" data-n="${esc(n)}"${sel[t].includes(n)?' checked':''}${sel[o].includes(n)?' disabled':''}>${esc(n)}</label>`).join('')}</div><div class="m" id="cnt-${t}">${sel[t].length} selected</div>`:'<div class="m">Add players to your list above, then tick them here</div>'};
+const bkPanel=()=>`<div class="card"><div class="row" style="align-items:center"><b style="flex:3">💾 Backup &amp; transfer</b><button data-a="bktog">${showBK?'Hide':'Open'}</button></div>${showBK?`<div class="m">Move all matches and players to another phone that has this app.</div><div class="row"><button class="p" data-a="bkexp">⬆ Export file</button><button data-a="bkcopy">Copy as text</button></div><div class="m" style="margin-top:8px">Import on this phone (adds to what is already here):</div><input type="file" id="bkf"><textarea id="bkt" rows="2" placeholder="Or paste backup text here"></textarea><button data-a="bkpaste" style="width:100%">Import pasted text</button>`:''}${bkMsg?`<div class="err" style="color:var(--g);margin-top:6px"><b>${esc(bkMsg)}</b></div>`:''}</div>`;
+const bkJson=()=>JSON.stringify({app:'cricscore',v:1,at:Date.now(),matches:M,players:PL});
+async function exportData(){const j=bkJson(),name='CricScore-backup-'+new Date().toISOString().slice(0,10)+'.json',P=window.Capacitor&&window.Capacitor.Plugins;
+ if(P&&P.Filesystem&&P.Share){try{const r=await P.Filesystem.writeFile({path:name,data:j,directory:'CACHE',encoding:'utf8'});await P.Share.share({title:name,url:r.uri,dialogTitle:'Save or send backup'})}
+  catch(e){const t=String(e&&e.message||e);if(!/cancel/i.test(t)){bkMsg='Export failed: '+t;render()}}return}
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([j],{type:'application/json'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500)}
+function doImport(t){try{const d=JSON.parse(t);if(!d||d.app!=='cricscore'||typeof d.matches!=='object')throw 0;
+ let a=0,u=0;const pr=m=>m.inn.reduce((s,i)=>s+i.balls.length,0)+(m.done?1:0);
+ Object.entries(d.matches).forEach(([id,m])=>{if(!m||!Array.isArray(m.inn))return;const o=M[id];if(!o){M[id]=m;a++}else if(pr(m)>pr(o)){M[id]=m;u++}});
+ const n0=PL.length;addPL(Array.isArray(d.players)?d.players.filter(x=>typeof x==='string'):[]);save();
+ bkMsg='Imported: '+a+' new match'+(a===1?'':'es')+', '+u+' updated, '+(PL.length-n0)+' new players'}catch(e){bkMsg='That is not a valid CricScore backup'}render()}
 const sq=(m,k)=>(k?m.sqb:m.sqa)||[],pl=s=>$(s).value.split('\n').map(x=>x.trim()).filter(Boolean);
 function pick0(at,ph,l,v,dis){if(!l.length)return`<input ${at} placeholder="${ph}" value="${esc(v)}">`;
  return`<select ${at}><option value="">${ph}</option>${l.filter(n=>n===v||!dis.includes(n)).map(n=>`<option${n===v?' selected':''}>${esc(n)}</option>`).join('')}</select>`}
@@ -111,7 +122,7 @@ function home(){const l=Object.entries(M).sort((a,b)=>b[1].t-a[1].t).map(([id,m]
  const sc=m.inn.map(i=>{const c=calc(i);return`<div><b>${esc(tn(m,i))}</b> <span class="big" style="font-size:20px">${c.R}/${c.W}</span> <span class="m">(${ovs(c.L)})</span></div>`}).join('');
  return`<div class="card" data-a="open" data-v="${id}" style="cursor:pointer"><span class="live">${m.done?'':'● LIVE'}</span> <span class="m">${esc(m.a)} vs ${esc(m.b)} · ${m.ov} ov</span>${sc}<div class="m">${esc(status(m))}</div><div style="text-align:right;margin-top:6px"><button data-a="del" data-v="${id}" style="padding:5px 12px;${delAsk===id?'background:#c62828;color:#fff;border-color:#c62828':''}">${delAsk===id?'Tap again to delete':'🗑 Delete'}</button></div></div>`}).join('');
  return`<div class="top"><h1>🏏 CricScore</h1><small>Saved on this phone · works offline</small></div>
- ${canW?`${plPanel()}<div class="card"><b>New match</b><input id="ta" placeholder="Team A" value="${esc(fd.ta)}">${squadPick('a')}<textarea id="pa" rows="2" placeholder="New players for Team A (one per line) - also saved to your list">${esc(fd.pa)}</textarea><input id="tb" placeholder="Team B" value="${esc(fd.tb)}">${squadPick('b')}<textarea id="pb" rows="2" placeholder="New players for Team B (one per line) - also saved to your list">${esc(fd.pb)}</textarea><div class="row"><input id="ov" type="number" min="1" max="50" value="${esc(fd.ov)}" placeholder="Overs"><select id="bf"><option value="0"${fd.bf==='1'?'':' selected'}>Team A bats first</option><option value="1"${fd.bf==='1'?' selected':''}>Team B bats first</option></select></div><button class="p" data-a="new" style="width:100%">Start match</button><div class="err">${esc(err)}</div></div>`:''}
+ ${canW?`${plPanel()}${bkPanel()}<div class="card"><b>New match</b><input id="ta" placeholder="Team A" value="${esc(fd.ta)}">${squadPick('a')}<textarea id="pa" rows="2" placeholder="New players for Team A (one per line) - also saved to your list">${esc(fd.pa)}</textarea><input id="tb" placeholder="Team B" value="${esc(fd.tb)}">${squadPick('b')}<textarea id="pb" rows="2" placeholder="New players for Team B (one per line) - also saved to your list">${esc(fd.pb)}</textarea><div class="row"><input id="ov" type="number" min="1" max="50" value="${esc(fd.ov)}" placeholder="Overs"><select id="bf"><option value="0"${fd.bf==='1'?'':' selected'}>Team A bats first</option><option value="1"${fd.bf==='1'?' selected':''}>Team B bats first</option></select></div><button class="p" data-a="new" style="width:100%">Start match</button><div class="err">${esc(err)}</div></div>`:''}
  ${l||'<p class="m" style="text-align:center">No matches yet.</p>'}${l?`<button data-a="delall" style="width:100%;margin-top:4px;${delAsk==='all'?'background:#c62828;color:#fff;border-color:#c62828':''}">${delAsk==='all'?'Tap again to delete ALL matches':'🗑 Delete all matches'}</button><div class="m" style="text-align:center;margin-top:4px">Your players list is kept.</div>`:''}`}
 function scoreTab(m){const i=last(m),c=calc(i),over=c.overs[Math.floor(c.L/6)];
  const fin=c.L>=m.ov*6||c.W>=10||!!status(m).match(/won|tied/);
@@ -154,6 +165,10 @@ $('#app').addEventListener('click',e=>{const t=e.target.closest('[data-a]');if(!
  else if(a==='undo'){const i=last(m),b=i.balls.pop();if(b){m.s=b.s;m.n=b.n;m.bw=b.bw;m.done=false;save()}render()}
  else if(a==='inn'){m.inn.push({bat:1-m.inn[0].bat,balls:[]});m.s=m.n=m.bw='';save();render()}
  else if(a==='pdf'){exportPdf()}
+ else if(a==='bktog'){showBK=!showBK;bkMsg='';render()}
+ else if(a==='bkexp'){bkMsg='';exportData()}
+ else if(a==='bkcopy'){const c=navigator.clipboard;(c&&c.writeText?c.writeText(bkJson()):Promise.reject()).then(()=>{bkMsg='Backup copied. Paste it on the other phone.';render()},()=>{bkMsg='Copy is not allowed here. Use Export file.';render()})}
+ else if(a==='bkpaste'){doImport($('#bkt').value)}
  else if(a==='del'){if(delAsk===v){delete M[v];save();delAsk=''}else delAsk=v;render()}
  else if(a==='delall'){if(delAsk==='all'){M={};save();delAsk=''}else delAsk='all';render()}
  else if(a==='ptog'){showPL=!showPL;render()}
@@ -162,6 +177,7 @@ $('#app').addEventListener('click',e=>{const t=e.target.closest('[data-a]');if(!
  else if(a==='end'){m.done=true;save();render()}});
 $('#app').addEventListener('input',e=>{const id=e.target.id;if(id&&id in fd){fd[id]=e.target.value;return}if(id&&PM[id]){pw[PM[id]]=e.target.value;return}const f=e.target.dataset.f;if(f&&M[cur]){M[cur][f]=e.target.value;save()}});
 $('#app').addEventListener('change',e=>{const t=e.target,d=t.dataset;
+ if(t.id==='bkf'){const f=t.files&&t.files[0];if(f){const r=new FileReader();r.onload=()=>doImport(String(r.result));r.onerror=()=>{bkMsg='Could not read that file';render()};r.readAsText(f)}return}
  if(d.t){const o=d.t==='a'?'b':'a';sel[d.t]=sel[d.t].filter(x=>x!==d.n);if(t.checked)sel[d.t].push(d.n);
   document.querySelectorAll('[data-t="'+o+'"]').forEach(c=>{if(c.dataset.n===d.n)c.disabled=t.checked});
   const c=document.getElementById('cnt-'+d.t);if(c)c.textContent=sel[d.t].length+' selected';return}
