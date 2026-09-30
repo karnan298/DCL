@@ -10,6 +10,7 @@ jobs:
       - uses: actions/setup-java@v4
         with: {distribution: temurin, java-version: 17}
       - run: mkdir -p ~/.android && cp debug.keystore ~/.android/debug.keystore
+      - run: if [ -f index.html ]; then mkdir -p www && cp index.html www/index.html; fi
       - run: npm install
       - run: npx cap add android
       - run: npx cap sync android
