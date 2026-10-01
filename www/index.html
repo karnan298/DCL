@@ -22,36 +22,36 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:6px 4px;t
 .live{color:#d32f2f;font-weight:700;font-size:12px}.err{color:#d32f2f;font-size:13px}
 .need{border:2px solid #d32f2f}.dim{opacity:.5}.pl{max-height:150px;overflow:auto;border:1px solid var(--b);border-radius:8px;padding:4px;margin:4px 0}.pc{display:block;padding:7px 4px}.pc input{width:auto;margin:0 8px 0 0}.chip{display:inline-block;background:var(--bg);border:1px solid var(--b);border-radius:14px;padding:5px 11px;margin:3px}.chip b{cursor:pointer;color:#d32f2f;padding-left:6px}</style></head><body><div id="app"></div>
 <script>
-let db=null,M={},cur=null,tab='live',mod='',wk=false,rt=false,err='',canW=true,pend=0,hold=0,dirty=false,pw0={k:'bowled',who:'s',r:0,nb:'',rw:'s',rk:'retired hurt',rnb:''},pw=Object.assign({},pw0),PM={wkk:'k',wko:'who',wkr:'r',nb:'nb',rw:'rw',rk:'rk',rnb:'rnb'};
+let db=null,M={},cur=null,tab='live',mod='',wk=false,rt=false,err='',canW=true,pend=0,hold=0,dirty=false,pw0={k:'bowled',who:'s',r:0,nb:'',f:'',bw:'',rw:'s',rk:'retired hurt',rnb:''},pw=Object.assign({},pw0),PM={wkk:'k',wko:'who',wkr:'r',wkf:'f',wbw:'bw',nb:'nb',rw:'rw',rk:'rk',rnb:'rnb'};
 const $=s=>document.querySelector(s),esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const ovs=n=>Math.floor(n/6)+'.'+n%6;
 const last=m=>m.inn[m.inn.length-1],tn=(m,i)=>i.bat?m.b:m.a;
 function lab(b){return b.k?'W':b.x==='wd'?'Wd'+(b.er>1?b.er-1:''):b.x==='nb'?'Nb'+(b.r||''):b.x==='b'?'B'+b.er:b.x==='lb'?'LB'+b.er:b.r}
 function calc(i){let R=0,W=0,L=0,ex=0;const bat={},bowl={},overs=[];
  i.balls.forEach(b=>{if(b.z){const p=bat[b.o]=bat[b.o]||{r:0,b:0,f:0,x:0,out:''};p.out=b.k;if(b.k==='retired out')W++;return}R+=b.r+b.er;ex+=b.x?b.er:0;const leg=b.x!=='wd'&&b.x!=='nb';
-  [b.s,b.n].forEach(n=>{const q0=bat[n]=bat[n]||{r:0,b:0,f:0,x:0,out:''};if(q0.out==='retired hurt')q0.out=''});
+  [b.s,b.n].forEach(n=>{if(!n)return;const q0=bat[n]=bat[n]||{r:0,b:0,f:0,x:0,out:''};if(q0.out==='retired hurt')q0.out=''});
   const p=bat[b.s];if(b.x!=='wd')p.b++;p.r+=b.r;if(b.r===4)p.f++;if(b.r===6)p.x++;
   const q=bowl[b.bw]=bowl[b.bw]||{l:0,r:0,w:0};q.r+=b.r+(b.x==='wd'||b.x==='nb'?b.er:0);
   const oi=Math.floor(L/6);(overs[oi]=overs[oi]||{bw:b.bw,r:0,b:[]}).b.push(b);overs[oi].r+=b.r+b.er;
   if(leg){L++;q.l++}
-  if(b.k){W++;const po=bat[b.o||b.s];po.out=b.k==='run out'?'run out':b.k+' b '+b.bw;if(b.k!=='run out')q.w++}});
+  if(b.k){W++;const po=bat[b.o||b.s];po.out=dis(b);if(b.k!=='run out')q.w++}});
  return{R,W,L,ex,bat,bowl,overs}}
 function status(m){const c=m.inn.map(calc);
  if(m.inn.length<2)return m.done?'Match ended':'';
  const t=c[0].R+1,r=c[1];
- if(r.R>=t)return tn(m,m.inn[1])+' won by '+(10-r.W)+' wkts';
- if(m.done||r.L>=m.ov*6||r.W>=10)return c[0].R===r.R?'Match tied':tn(m,m.inn[0])+' won by '+(c[0].R-r.R)+' runs';
+ if(r.R>=t)return tn(m,m.inn[1])+' won by '+(lim(m,m.inn[1])-r.W)+' wkts';
+ if(m.done||r.L>=m.ov*6||r.W>=lim(m,m.inn[1]))return c[0].R===r.R?'Match tied':tn(m,m.inn[0])+' won by '+(c[0].R-r.R)+' runs';
  return tn(m,m.inn[1])+' need '+(t-r.R)+' off '+(m.ov*6-r.L)+' balls'}
 function save(){try{localStorage.setItem('cricscore',JSON.stringify(M))}catch(x){err='Phone storage full'}}
-function add(o){const m=M[cur],i=last(m);
- if(!m.s||!m.n||!m.bw){err='Enter striker, non-striker and bowler first';return render()}
- if(o.k&&!o.nb&&calc(i).W+1<10){err='Select the new batsman';return render()}
- err='';const b=Object.assign({s:m.s,n:m.n,bw:m.bw,x:'',r:0,er:0,k:'',o:''},o);delete b.nb;
+function add(o){const m=M[cur],i=last(m),W0=calc(i).W,so=solo(m,i,W0);
+ if(!m.s||(!m.n&&!so)||!m.bw){err=!m.bw?'Select the bowler first':'Enter striker and non-striker first';return render()}
+ if(o.k&&!o.nb&&needNew(m,i,W0+1)){err='Select the new batsman';return render()}
+ err='';const b=Object.assign({s:m.s,n:m.n,bw:m.bw,x:'',r:0,er:0,k:'',o:'',f:''},o);delete b.nb;
  const odd=(b.r+(b.x==='b'||b.x==='lb'?b.er:0)+(b.x==='wd'?b.er-1:0))%2;
- if(odd)[m.s,m.n]=[m.n,m.s];
- if(b.k){if(m.s===b.o)m.s=o.nb||'';else if(m.n===b.o)m.n=o.nb||''}
+ if(odd&&!so)[m.s,m.n]=[m.n,m.s];
+ if(b.k){const out=b.o||m.s;if(o.nb){if(m.s===out)m.s=o.nb;else m.n=o.nb}else{if(m.s===out)m.s=m.n;m.n=''}}
  i.balls.push(b);const L=calc(i).L;
- if(b.x!=='wd'&&b.x!=='nb'&&L%6===0){[m.s,m.n]=[m.n,m.s];m.bw=''}
+ if(b.x!=='wd'&&b.x!=='nb'&&L%6===0){if(m.n)[m.s,m.n]=[m.n,m.s];m.bw=''}
  mod='';wk=false;rt=false;pw=Object.assign({},pw0);save();render()}
 const mk=n=>mod==='wd'?{x:'wd',er:1+n}:mod==='nb'?{x:'nb',er:1,r:n}:mod==='b'||mod==='lb'?{x:mod,er:n}:{r:n};
 function sheet(m){const S=2,W=595,H=842,pg=[];let cv,g,y;
@@ -111,6 +111,10 @@ function doImport(t){try{const d=JSON.parse(t);if(!d||d.app!=='cricscore'||typeo
  Object.entries(d.matches).forEach(([id,m])=>{if(!m||!Array.isArray(m.inn))return;const o=M[id];if(!o){M[id]=m;a++}else if(pr(m)>pr(o)){M[id]=m;u++}});
  const n0=PL.length;addPL(Array.isArray(d.players)?d.players.filter(x=>typeof x==='string'):[]);save();
  bkMsg='Imported: '+a+' new match'+(a===1?'':'es')+', '+u+' updated, '+(PL.length-n0)+' new players'}catch(e){bkMsg='That is not a valid CricScore backup'}render()}
+const lim=(m,i)=>{const n=sq(m,i.bat).length;return n?(m.lone===false?n-1:n):10};
+const solo=(m,i,W)=>{const n=sq(m,i.bat).length;return m.lone!==false&&n>1&&W>=n-1&&W<n};
+const needNew=(m,i,W1)=>{const n=sq(m,i.bat).length;return n?n-W1>=2:W1<10};
+function dis(b){const f=b.f,w=b.bw,k=b.k;return k==='run out'?'run out'+(f?' ('+f+')':''):k==='caught'?(f?(f===w?'c & b '+w:'c '+f+' b '+w):'caught b '+w):k==='stumped'?'st '+(f?f+' ':'')+'b '+w:k==='lbw'?'lbw b '+w:k==='bowled'?'b '+w:k+' b '+w}
 const sq=(m,k)=>(k?m.sqb:m.sqa)||[],pl=s=>$(s).value.split('\n').map(x=>x.trim()).filter(Boolean);
 function pick0(at,ph,l,v,dis){if(!l.length)return`<input ${at} placeholder="${ph}" value="${esc(v)}">`;
  return`<select ${at}><option value="">${ph}</option>${l.filter(n=>n===v||!dis.includes(n)).map(n=>`<option${n===v?' selected':''}>${esc(n)}</option>`).join('')}</select>`}
@@ -122,20 +126,20 @@ function home(){const l=Object.entries(M).sort((a,b)=>b[1].t-a[1].t).map(([id,m]
  const sc=m.inn.map(i=>{const c=calc(i);return`<div><b>${esc(tn(m,i))}</b> <span class="big" style="font-size:20px">${c.R}/${c.W}</span> <span class="m">(${ovs(c.L)})</span></div>`}).join('');
  return`<div class="card" data-a="open" data-v="${id}" style="cursor:pointer"><span class="live">${m.done?'':'● LIVE'}</span> <span class="m">${esc(m.a)} vs ${esc(m.b)} · ${m.ov} ov</span>${sc}<div class="m">${esc(status(m))}</div><div style="text-align:right;margin-top:6px"><button data-a="del" data-v="${id}" style="padding:5px 12px;${delAsk===id?'background:#c62828;color:#fff;border-color:#c62828':''}">${delAsk===id?'Tap again to delete':'🗑 Delete'}</button></div></div>`}).join('');
  return`<div class="top"><h1>🏏 CricScore</h1><small>Saved on this phone · works offline</small></div>
- ${canW?`${plPanel()}${bkPanel()}<div class="card"><b>New match</b><input id="ta" placeholder="Team A" value="${esc(fd.ta)}">${squadPick('a')}<textarea id="pa" rows="2" placeholder="New players for Team A (one per line) - also saved to your list">${esc(fd.pa)}</textarea><input id="tb" placeholder="Team B" value="${esc(fd.tb)}">${squadPick('b')}<textarea id="pb" rows="2" placeholder="New players for Team B (one per line) - also saved to your list">${esc(fd.pb)}</textarea><div class="row"><input id="ov" type="number" min="1" max="50" value="${esc(fd.ov)}" placeholder="Overs"><select id="bf"><option value="0"${fd.bf==='1'?'':' selected'}>Team A bats first</option><option value="1"${fd.bf==='1'?' selected':''}>Team B bats first</option></select></div><button class="p" data-a="new" style="width:100%">Start match</button><div class="err">${esc(err)}</div></div>`:''}
+ ${canW?`${plPanel()}${bkPanel()}<div class="card"><b>New match</b><input id="ta" placeholder="Team A" value="${esc(fd.ta)}">${squadPick('a')}<textarea id="pa" rows="2" placeholder="New players for Team A (one per line) - also saved to your list">${esc(fd.pa)}</textarea><input id="tb" placeholder="Team B" value="${esc(fd.tb)}">${squadPick('b')}<textarea id="pb" rows="2" placeholder="New players for Team B (one per line) - also saved to your list">${esc(fd.pb)}</textarea><div class="row"><input id="ov" type="number" min="1" max="50" value="${esc(fd.ov)}" placeholder="Overs"><select id="bf"><option value="0"${fd.bf==='1'?'':' selected'}>Team A bats first</option><option value="1"${fd.bf==='1'?' selected':''}>Team B bats first</option></select></div><label class="pc"><input type="checkbox" id="lone"${fd.lone===false?'':' checked'}>Last batsman can bat alone (local rules)</label><button class="p" data-a="new" style="width:100%">Start match</button><div class="err">${esc(err)}</div></div>`:''}
  ${l||'<p class="m" style="text-align:center">No matches yet.</p>'}${l?`<button data-a="delall" style="width:100%;margin-top:4px;${delAsk==='all'?'background:#c62828;color:#fff;border-color:#c62828':''}">${delAsk==='all'?'Tap again to delete ALL matches':'🗑 Delete all matches'}</button><div class="m" style="text-align:center;margin-top:4px">Your players list is kept.</div>`:''}`}
 function scoreTab(m){const i=last(m),c=calc(i),over=c.overs[Math.floor(c.L/6)];
- const fin=c.L>=m.ov*6||c.W>=10||!!status(m).match(/won|tied/);
+ const fin=c.L>=m.ov*6||c.W>=lim(m,i)||!!status(m).match(/won|tied/);
  const chips=(over?over.b:[]).map(b=>`<span class="ball ${b.k?'w':b.r===4&&!b.x?'f':b.r===6&&!b.x?'s':b.x?'e':''}">${lab(b)}</span>`).join('');
- const st=c.bat[m.s],nst=c.bat[m.n],bl=sq(m,i.bat),fl=sq(m,1-i.bat),gone=Object.entries(c.bat).filter(([n,p])=>p.out&&p.out!=='retired hurt').map(x=>x[0]),miss=[!m.s&&'striker',!m.n&&'non-striker',!m.bw&&(c.L>0&&c.L%6===0?'next bowler':'bowler')].filter(Boolean);
+ const st=c.bat[m.s],nst=c.bat[m.n],bl=sq(m,i.bat),fl=sq(m,1-i.bat),gone=Object.entries(c.bat).filter(([n,p])=>p.out&&p.out!=='retired hurt').map(x=>x[0]),sl=solo(m,i,c.W),miss=[!m.s&&'striker',!m.n&&!sl&&'non-striker',!m.bw&&(c.L>0&&c.L%6===0?'next bowler':'bowler')].filter(Boolean),nn=needNew(m,i,c.W+1);
  if(m.done||!canW)return`<div class="card">${chips||'<span class="m">Waiting for the next ball…</span>'}<div>${st?esc(m.s)+'* '+st.r+'('+st.b+')':''} ${nst?' · '+esc(m.n)+' '+nst.r+'('+nst.b+')':''}</div><div class="m">${m.bw?'Bowler: '+esc(m.bw):''}</div></div>`;
  if(fin)return`<div class="card"><b>${m.inn.length<2?'Innings complete':esc(status(m))}</b><div class="row">${m.inn.length<2?'<button class="p" data-a="inn">Start 2nd innings</button>':'<button class="p" data-a="end">Finish match</button>'}<button data-a="undo">Undo last ball</button></div></div>`;
- return`<div class="card"><div style="margin-bottom:6px"><b>🏏 ${esc(m.s)||'—'}*</b> ${st?st.r+' ('+st.b+')':''} &nbsp;|&nbsp; ${esc(m.n)||'—'} ${nst?nst.r+' ('+nst.b+')':''}<div class="m">⚾ ${esc(m.bw)||'—'} ${c.bowl[m.bw]?ovs(c.bowl[m.bw].l)+'-'+c.bowl[m.bw].r+'-'+c.bowl[m.bw].w:''}</div></div>${pick('data-f="s"'+(m.s?'':' class="need"'),'Striker (on strike)',bl,m.s,[...gone,m.n])}${pick('data-f="n"'+(m.n?'':' class="need"'),'Non-striker',bl,m.n,[...gone,m.s])}${pick('data-f="bw"'+(m.bw?'':' class="need"'),'Bowler (this over)',fl,m.bw,[])}
+ return`<div class="card"><div style="margin-bottom:6px"><b>🏏 ${esc(m.s)||'—'}*</b> ${st?st.r+' ('+st.b+')':''} &nbsp;|&nbsp; ${esc(m.n)||(sl?'(batting alone)':'—')} ${nst?nst.r+' ('+nst.b+')':''}<div class="m">⚾ ${esc(m.bw)||'—'} ${c.bowl[m.bw]?ovs(c.bowl[m.bw].l)+'-'+c.bowl[m.bw].r+'-'+c.bowl[m.bw].w:''}</div></div>${pick('data-f="s"'+(m.s?'':' class="need"'),'Striker (on strike)',bl,m.s,[...gone,m.n])}${pick('data-f="n"'+(m.n||sl?'':' class="need"'),'Non-striker',bl,m.n,[...gone,m.s])}${pick('data-f="bw"'+(m.bw?'':' class="need"'),'Bowler (this over)',fl,m.bw,[])}
  <div class="m" style="margin-top:6px">This over:</div><div>${chips||'—'}</div>${miss.length?'<div class="err"><b>Select '+miss.join(', ')+' to continue scoring</b></div>':''}<div class="err">${esc(err)}</div>
  <div class="row">${[['','Runs'],['wd','Wide'],['nb','No ball'],['b','Bye'],['lb','Leg bye']].map(([k,t])=>`<button class="${mod===k?'on':''}" data-a="mod" data-v="${k}">${t}</button>`).join('')}</div>
  <div class="row runs${miss.length?' dim':''}">${[0,1,2,3,4,5,6].map(n=>`<button data-a="run" data-v="${n}">${n}</button>`).join('')}</div>
  <div class="row"><button class="w" data-a="wk">OUT</button><button data-a="rt">Retire</button><button data-a="swap">⇄ Swap</button><button data-a="undo">Undo</button></div>
- ${wk?`<div class="row"><select id="wkk">${['bowled','caught','lbw','run out','stumped','hit wicket'].map(k=>`<option${pw.k===k?' selected':''}>${k}</option>`).join('')}</select><select id="wko"><option value="s"${pw.who==='s'?' selected':''}>Out: ${esc(m.s)||'striker'}</option><option value="n"${pw.who==='n'?' selected':''}>Out: ${esc(m.n)||'non-striker'}</option></select><select id="wkr">${[0,1,2,3].map(n=>`<option value="${n}"${+pw.r===n?' selected':''}>Runs run: ${n}</option>`).join('')}</select></div><div class="row">${pick('id="nb"','New batsman',bl,pw.nb,[...gone,m.s,m.n])}<button class="p" data-a="wkc">Confirm OUT</button></div>`:''}${rt?`<div class="row"><select id="rw"><option value="s"${pw.rw==='s'?' selected':''}>${esc(m.s)||'Striker'} (striker)</option><option value="n"${pw.rw==='n'?' selected':''}>${esc(m.n)||'Non-striker'} (non-striker)</option></select><select id="rk">${['retired hurt','retired out'].map(k=>`<option${pw.rk===k?' selected':''}>${k}</option>`).join('')}</select>${pick('id="rnb"','New batsman',bl,pw.rnb,[...gone,m.s,m.n])}<button class="p" data-a="rtc">Confirm</button></div>`:''}</div>`}
+ ${wk?`<div class="row"><select id="wkk">${['bowled','caught','lbw','run out','stumped','hit wicket'].map(k=>`<option${pw.k===k?' selected':''}>${k}</option>`).join('')}</select><select id="wko"><option value="s"${pw.who==='s'?' selected':''}>Out: ${esc(m.s)||'striker'}</option><option value="n"${pw.who==='n'?' selected':''}>Out: ${esc(m.n)||'non-striker'}</option></select><select id="wkr">${[0,1,2,3].map(n=>`<option value="${n}"${+pw.r===n?' selected':''}>Runs run: ${n}</option>`).join('')}</select></div>${['caught','stumped','run out'].includes(pw.k)?pick('id="wkf"',pw.k==='caught'?'Caught by':pw.k==='stumped'?'Stumped by':'Run out by',fl,pw.f,[]):''}${m.bw?'':pick('id="wbw"','Bowler (this over)',fl,pw.bw,[])}<div class="row">${nn?pick('id="nb"','New batsman',bl,pw.nb,[...gone,m.s,m.n]):'<span class="m">No batsman left to come in</span>'}<button class="p" data-a="wkc">Confirm OUT</button></div>`:''}${rt?`<div class="row"><select id="rw"><option value="s"${pw.rw==='s'?' selected':''}>${esc(m.s)||'Striker'} (striker)</option><option value="n"${pw.rw==='n'?' selected':''}>${esc(m.n)||'Non-striker'} (non-striker)</option></select><select id="rk">${['retired hurt','retired out'].map(k=>`<option${pw.rk===k?' selected':''}>${k}</option>`).join('')}</select>${pick('id="rnb"','New batsman',bl,pw.rnb,[...gone,m.s,m.n])}<button class="p" data-a="rtc">Confirm</button></div>`:''}</div>`}
 function cardTab(m){return m.inn.map(i=>{const c=calc(i);
  return`<div class="card"><b>${esc(tn(m,i))}</b> — ${c.R}/${c.W} (${ovs(c.L)} ov)
  <table><tr><th>Batter</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th></tr>${Object.entries(c.bat).map(([n,p])=>`<tr><td>${esc(n)}<div class="m">${p.out||'batting'}</div></td><td><b>${p.r}</b></td><td>${p.b}</td><td>${p.f}</td><td>${p.x}</td><td>${p.b?(p.r*100/p.b).toFixed(0):'-'}</td></tr>`).join('')}</table>
@@ -154,13 +158,13 @@ $('#app').addEventListener('click',e=>{const t=e.target.closest('[data-a]');if(!
  else if(a==='tab'){tab=v;render()}
  else if(a==='new'){const A=$('#ta').value.trim(),B=$('#tb').value.trim(),o=+$('#ov').value;
   if(!A||!B||!(o>0)){err='Enter both team names and overs';return render()}
-  err='';const id='m'+Date.now(),f=+$('#bf').value,qa=[...new Set([...sel.a,...pl('#pa').map(canon)])],qb=[...new Set([...sel.b,...pl('#pb').map(canon)])];addPL(qa.concat(qb));sel={a:[],b:[]};fd={ta:'',tb:'',ov:'20',bf:'0',pa:'',pb:''};M[id]={sqa:qa,sqb:qb,a:A,b:B,ov:o,t:Date.now(),inn:[{bat:f,balls:[]}],s:'',n:'',bw:'',done:false};cur=id;tab='live';save();render()}
+  err='';const id='m'+Date.now(),f=+$('#bf').value,qa=[...new Set([...sel.a,...pl('#pa').map(canon)])],qb=[...new Set([...sel.b,...pl('#pb').map(canon)])];addPL(qa.concat(qb));sel={a:[],b:[]};fd={ta:'',tb:'',ov:'20',bf:'0',pa:'',pb:''};M[id]={lone:$('#lone').checked,sqa:qa,sqb:qb,a:A,b:B,ov:o,t:Date.now(),inn:[{bat:f,balls:[]}],s:'',n:'',bw:'',done:false};cur=id;tab='live';save();render()}
  else if(a==='mod'){mod=v;render()}
  else if(a==='run'){const n=+v;add(mk(n))}
  else if(a==='wk'){wk=!wk;rt=false;pw=Object.assign({},pw0);render()}
  else if(a==='rt'){rt=!rt;wk=false;pw=Object.assign({},pw0);render()}
  else if(a==='rtc'){retire($('#rw').value,$('#rk').value,$('#rnb').value.trim())}
- else if(a==='wkc'){{const out=$('#wko').value==='n'?m.n:m.s;add(Object.assign({k:$('#wkk').value,o:out,nb:$('#nb').value.trim()},mk(+$('#wkr').value)))}}
+ else if(a==='wkc'){{const g=q=>($(q)||{value:''}).value.trim(),out=$('#wko').value==='n'?m.n:m.s;if(!m.bw&&g('#wbw'))m.bw=g('#wbw');add(Object.assign({k:$('#wkk').value,o:out,f:g('#wkf'),nb:g('#nb')},mk(+$('#wkr').value)))}}
  else if(a==='swap'){[m.s,m.n]=[m.n,m.s];save();render()}
  else if(a==='undo'){const i=last(m),b=i.balls.pop();if(b){m.s=b.s;m.n=b.n;m.bw=b.bw;m.done=false;save()}render()}
  else if(a==='inn'){m.inn.push({bat:1-m.inn[0].bat,balls:[]});m.s=m.n=m.bw='';save();render()}
@@ -176,7 +180,7 @@ $('#app').addEventListener('click',e=>{const t=e.target.closest('[data-a]');if(!
  else if(a==='pdel'){PL=PL.filter(n=>n!==v);sel.a=sel.a.filter(n=>n!==v);sel.b=sel.b.filter(n=>n!==v);savePL();render()}
  else if(a==='end'){m.done=true;save();render()}});
 $('#app').addEventListener('input',e=>{const id=e.target.id;if(id&&id in fd){fd[id]=e.target.value;return}if(id&&PM[id]){pw[PM[id]]=e.target.value;return}const f=e.target.dataset.f;if(f&&M[cur]){M[cur][f]=e.target.value;save()}});
-$('#app').addEventListener('change',e=>{const t=e.target,d=t.dataset;
+$('#app').addEventListener('change',e=>{const t=e.target,d=t.dataset;if(t.id==='wkk'){render();return}if(t.id==='lone'){fd.lone=t.checked;return}
  if(t.id==='bkf'){const f=t.files&&t.files[0];if(f){const r=new FileReader();r.onload=()=>doImport(String(r.result));r.onerror=()=>{bkMsg='Could not read that file';render()};r.readAsText(f)}return}
  if(d.t){const o=d.t==='a'?'b':'a';sel[d.t]=sel[d.t].filter(x=>x!==d.n);if(t.checked)sel[d.t].push(d.n);
   document.querySelectorAll('[data-t="'+o+'"]').forEach(c=>{if(c.dataset.n===d.n)c.disabled=t.checked});
