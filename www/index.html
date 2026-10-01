@@ -1,5 +1,5 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>CricScore</title><meta name="theme-color" content="#0b6e4f">
-<style>
+<script src="firebase-config.js"></script><script src="firebase-app-compat.js"></script><script src="firebase-auth-compat.js"></script><script src="firebase-firestore-compat.js"></script><style>
 :root{--bg:#eef1ef;--c:#fff;--t:#14201b;--m:#66736d;--g:#0b6e4f;--b:#d9e0dc;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#101413;--c:#1a201e;--t:#e8efeb;--m:#8f9c96;--b:#2c3531}}
 :root[data-theme="dark"]{--bg:#101413;--c:#1a201e;--t:#e8efeb;--m:#8f9c96;--b:#2c3531}
@@ -22,7 +22,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:6px 4px;t
 .live{color:#d32f2f;font-weight:700;font-size:12px}.err{color:#d32f2f;font-size:13px}
 .need{border:2px solid #d32f2f}.dim{opacity:.5}.pl{max-height:150px;overflow:auto;border:1px solid var(--b);border-radius:8px;padding:4px;margin:4px 0}.pc{display:block;padding:7px 4px}.pc input{width:auto;margin:0 8px 0 0}.chip{display:inline-block;background:var(--bg);border:1px solid var(--b);border-radius:14px;padding:5px 11px;margin:3px}.chip b{cursor:pointer;color:#d32f2f;padding-left:6px}</style></head><body><div id="app"></div>
 <script>
-let db=null,M={},cur=null,tab='live',mod='',wk=false,rt=false,err='',canW=true,pend=0,hold=0,dirty=false,pw0={k:'bowled',who:'s',r:0,nb:'',f:'',bw:'',rw:'s',rk:'retired hurt',rnb:''},pw=Object.assign({},pw0),PM={wkk:'k',wko:'who',wkr:'r',wkf:'f',wbw:'bw',nb:'nb',rw:'rw',rk:'rk',rnb:'rnb'};
+let db=null,M={},cur=null,tab='live',mod='',wk=false,rt=false,err='',canW=false,user=null,fbOK=false,showLogin=false,lerr='',lem='',auth=null,pend=0,hold=0,dirty=false,pw0={k:'bowled',who:'s',r:0,nb:'',f:'',bw:'',rw:'s',rk:'retired hurt',rnb:''},pw=Object.assign({},pw0),PM={wkk:'k',wko:'who',wkr:'r',wkf:'f',wbw:'bw',nb:'nb',rw:'rw',rk:'rk',rnb:'rnb'};
 const $=s=>document.querySelector(s),esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const ovs=n=>Math.floor(n/6)+'.'+n%6;
 const last=m=>m.inn[m.inn.length-1],tn=(m,i)=>i.bat?m.b:m.a;
@@ -42,7 +42,13 @@ function status(m){const c=m.inn.map(calc);
  if(r.R>=t)return tn(m,m.inn[1])+' won by '+(lim(m,m.inn[1])-r.W)+' wkts';
  if(m.done||r.L>=m.ov*6||r.W>=lim(m,m.inn[1]))return c[0].R===r.R?'Match tied':tn(m,m.inn[0])+' won by '+(c[0].R-r.R)+' runs';
  return tn(m,m.inn[1])+' need '+(t-r.R)+' off '+(m.ov*6-r.L)+' balls'}
-function save(){try{localStorage.setItem('cricscore',JSON.stringify(M))}catch(x){err='Phone storage full'}}
+const LK=90000,canE=m=>!!user&&(!m.lk||m.lk.u===user.uid||Date.now()-m.lk.t>LK),clean=o=>JSON.parse(JSON.stringify(o));
+const fsSet=id=>db.collection('matches').doc(id).set(clean(M[id])).catch(e=>{err='Save failed: '+(e.code||e.message);render()});
+const fsDel=id=>db.collection('matches').doc(id).delete().catch(e=>{err='Delete failed: '+(e.code||e.message);render()});
+function save(){if(db&&user&&cur&&M[cur]&&canE(M[cur]))fsSet(cur)}
+function lock(id){if(!user||!M[id])return;M[id].lk={u:user.uid,e:user.email,t:Date.now()};fsSet(id)}
+function releaseLock(){const m=M[cur];if(user&&m&&m.lk&&m.lk.u===user.uid){m.lk=null;db.collection('matches').doc(cur).update({lk:null}).catch(()=>{})}}
+setInterval(()=>{const m=M[cur];if(user&&m&&m.lk&&m.lk.u===user.uid)db.collection('matches').doc(cur).update({'lk.t':Date.now()}).catch(()=>{})},30000);
 function add(o){const m=M[cur],i=last(m),W0=calc(i).W,so=solo(m,i,W0);
  if(!m.s||(!m.n&&!so)||!m.bw){err=!m.bw?'Select the bowler first':'Enter striker and non-striker first';return render()}
  if(o.k&&!o.nb&&needNew(m,i,W0+1)){err='Select the new batsman';return render()}
@@ -51,7 +57,7 @@ function add(o){const m=M[cur],i=last(m),W0=calc(i).W,so=solo(m,i,W0);
  if(odd&&!so)[m.s,m.n]=[m.n,m.s];
  if(b.k){const out=b.o||m.s;if(o.nb){if(m.s===out)m.s=o.nb;else m.n=o.nb}else{if(m.s===out)m.s=m.n;m.n=''}}
  i.balls.push(b);const L=calc(i).L;
- if(b.x!=='wd'&&b.x!=='nb'&&L%6===0){if(m.n)[m.s,m.n]=[m.n,m.s];m.bw=''}
+ ovMsg='';if(b.x!=='wd'&&b.x!=='nb'&&L%6===0){if(m.n)[m.s,m.n]=[m.n,m.s];m.bw='';const co=calc(i).overs[L/6-1];ovMsg='Over '+(L/6)+' complete'+(co?' ('+co.r+' runs)':'')+(m.s?'. Strike rotated: '+m.s+' is now on strike':'')}
  mod='';wk=false;rt=false;pw=Object.assign({},pw0);save();render()}
 const mk=n=>mod==='wd'?{x:'wd',er:1+n}:mod==='nb'?{x:'nb',er:1,r:n}:mod==='b'||mod==='lb'?{x:mod,er:n}:{r:n};
 function sheet(m){const S=2,W=595,H=842,pg=[];let cv,g,y;
@@ -94,13 +100,14 @@ async function exportPdf(){const m=M[cur];if(!m)return;
   const r=await P.Filesystem.writeFile({path:name,data:btoa(b),directory:'CACHE'});await P.Share.share({title:name,url:r.uri,dialogTitle:'Save or share scorecard'})}
   catch(e){const t=String(e&&e.message||e);if(!/cancel/i.test(t)){err='PDF failed: '+t;render()}}return}
  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500)}
-let PL=[],sel={a:[],b:[]},fd={ta:'',tb:'',ov:'20',bf:'0',pa:'',pb:''},showPL=false,delAsk='',showBK=false,bkMsg='';
+let PL=[],sel={a:[],b:[]},fd={ta:'',tb:'',ov:'20',bf:'0',pa:'',pb:''},showPL=false,delAsk='',showBK=false,bkMsg='',ovMsg='';
 const srt=()=>[...PL].sort((x,y)=>x.localeCompare(y)),canon=n=>PL.find(p=>p.toLowerCase()===n.toLowerCase())||n;
-function savePL(){try{localStorage.setItem('cricscore_players',JSON.stringify(PL))}catch(x){}}
+function savePL(){if(db&&user)db.doc('meta/players').set({list:PL}).catch(()=>{})}
 function addPL(l){l.forEach(n=>{n=n.trim();if(n&&!PL.some(p=>p.toLowerCase()===n.toLowerCase()))PL.push(n)});savePL()}
 const plPanel=()=>`<div class="card"><div class="row" style="align-items:center"><b style="flex:3">👥 Players list (${PL.length})</b><button data-a="ptog">${showPL?'Hide':'Manage'}</button></div>${showPL?`<textarea id="np" rows="3" placeholder="Add players: one per line or comma separated"></textarea><button class="p" data-a="padd" style="width:100%">Add to list</button><div style="margin-top:8px">${srt().map(n=>`<span class="chip">${esc(n)} <b data-a="pdel" data-v="${esc(n)}">×</b></span>`).join('')||'<span class="m">No players yet</span>'}</div>`:''}</div>`;
 const squadPick=t=>{const o=t==='a'?'b':'a';return PL.length?`<div class="pl">${srt().map(n=>`<label class="pc"><input type="checkbox" data-t="${t}" data-n="${esc(n)}"${sel[t].includes(n)?' checked':''}${sel[o].includes(n)?' disabled':''}>${esc(n)}</label>`).join('')}</div><div class="m" id="cnt-${t}">${sel[t].length} selected</div>`:'<div class="m">Add players to your list above, then tick them here</div>'};
-const bkPanel=()=>`<div class="card"><div class="row" style="align-items:center"><b style="flex:3">💾 Backup &amp; transfer</b><button data-a="bktog">${showBK?'Hide':'Open'}</button></div>${showBK?`<div class="m">Move all matches and players to another phone that has this app.</div><div class="row"><button class="p" data-a="bkexp">⬆ Export file</button><button data-a="bkcopy">Copy as text</button></div><div class="m" style="margin-top:8px">Import on this phone (adds to what is already here):</div><input type="file" id="bkf"><textarea id="bkt" rows="2" placeholder="Or paste backup text here"></textarea><button data-a="bkpaste" style="width:100%">Import pasted text</button>`:''}${bkMsg?`<div class="err" style="color:var(--g);margin-top:6px"><b>${esc(bkMsg)}</b></div>`:''}</div>`;
+const bkPanel=()=>`<div class="card"><div class="row" style="align-items:center"><b style="flex:3">💾 Backup &amp; transfer</b><button data-a="bktog">${showBK?'Hide':'Open'}</button></div>${showBK?`${Object.keys(oldLocal().m).length?`<button data-a="bkold" class="p" style="width:100%;margin:6px 0">☁ Upload ${Object.keys(oldLocal().m).length} old matches from this phone to the cloud</button>`:''}<div class="m">Matches are now stored in the cloud. You can still export a backup file or import one.</div><div class="row"><button class="p" data-a="bkexp">⬆ Export file</button><button data-a="bkcopy">Copy as text</button></div><div class="m" style="margin-top:8px">Import on this phone (adds to what is already here):</div><input type="file" id="bkf"><textarea id="bkt" rows="2" placeholder="Or paste backup text here"></textarea><button data-a="bkpaste" style="width:100%">Import pasted text</button>`:''}${bkMsg?`<div class="err" style="color:var(--g);margin-top:6px"><b>${esc(bkMsg)}</b></div>`:''}</div>`;
+const oldLocal=()=>{let m={},p=[];try{m=JSON.parse(localStorage.getItem('cricscore')||'{}')}catch(x){}try{p=JSON.parse(localStorage.getItem('cricscore_players')||'[]')}catch(x){}return{m,p}};
 const bkJson=()=>JSON.stringify({app:'cricscore',v:1,at:Date.now(),matches:M,players:PL});
 async function exportData(){const j=bkJson(),name='CricScore-backup-'+new Date().toISOString().slice(0,10)+'.json',P=window.Capacitor&&window.Capacitor.Plugins;
  if(P&&P.Filesystem&&P.Share){try{const r=await P.Filesystem.writeFile({path:name,data:j,directory:'CACHE',encoding:'utf8'});await P.Share.share({title:name,url:r.uri,dialogTitle:'Save or send backup'})}
@@ -108,8 +115,8 @@ async function exportData(){const j=bkJson(),name='CricScore-backup-'+new Date()
  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([j],{type:'application/json'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500)}
 function doImport(t){try{const d=JSON.parse(t);if(!d||d.app!=='cricscore'||typeof d.matches!=='object')throw 0;
  let a=0,u=0;const pr=m=>m.inn.reduce((s,i)=>s+i.balls.length,0)+(m.done?1:0);
- Object.entries(d.matches).forEach(([id,m])=>{if(!m||!Array.isArray(m.inn))return;const o=M[id];if(!o){M[id]=m;a++}else if(pr(m)>pr(o)){M[id]=m;u++}});
- const n0=PL.length;addPL(Array.isArray(d.players)?d.players.filter(x=>typeof x==='string'):[]);save();
+ const ch=[];Object.entries(d.matches).forEach(([id,m])=>{if(!m||!Array.isArray(m.inn))return;delete m.lk;const o=M[id];if(!o){M[id]=m;a++;ch.push(id)}else if(pr(m)>pr(o)){M[id]=m;u++;ch.push(id)}});ch.forEach(fsSet);
+ const n0=PL.length;addPL(Array.isArray(d.players)?d.players.filter(x=>typeof x==='string'):[]);
  bkMsg='Imported: '+a+' new match'+(a===1?'':'es')+', '+u+' updated, '+(PL.length-n0)+' new players'}catch(e){bkMsg='That is not a valid CricScore backup'}render()}
 const lim=(m,i)=>{const n=sq(m,i.bat).length;return n?(m.lone===false?n-1:n):10};
 const solo=(m,i,W)=>{const n=sq(m,i.bat).length;return m.lone!==false&&n>1&&W>=n-1&&W<n};
@@ -124,18 +131,18 @@ function retire(w,k,nb){const m=M[cur],i=last(m);if(!m[w]||!nb){err='Choose who 
  err='';i.balls.push({z:1,k,o:m[w],s:m.s,n:m.n,bw:m.bw,x:'',r:0,er:0});m[w]=nb;rt=false;pw=Object.assign({},pw0);save();render()}
 function home(){const l=Object.entries(M).sort((a,b)=>b[1].t-a[1].t).map(([id,m])=>{
  const sc=m.inn.map(i=>{const c=calc(i);return`<div><b>${esc(tn(m,i))}</b> <span class="big" style="font-size:20px">${c.R}/${c.W}</span> <span class="m">(${ovs(c.L)})</span></div>`}).join('');
- return`<div class="card" data-a="open" data-v="${id}" style="cursor:pointer"><span class="live">${m.done?'':'● LIVE'}</span> <span class="m">${esc(m.a)} vs ${esc(m.b)} · ${m.ov} ov</span>${sc}<div class="m">${esc(status(m))}</div><div style="text-align:right;margin-top:6px"><button data-a="del" data-v="${id}" style="padding:5px 12px;${delAsk===id?'background:#c62828;color:#fff;border-color:#c62828':''}">${delAsk===id?'Tap again to delete':'🗑 Delete'}</button></div></div>`}).join('');
- return`<div class="top"><h1>🏏 CricScore</h1><small>Saved on this phone · works offline</small></div>
+ return`<div class="card" data-a="open" data-v="${id}" style="cursor:pointer"><span class="live">${m.done?'':'● LIVE'}</span> <span class="m">${esc(m.a)} vs ${esc(m.b)} · ${m.ov} ov</span>${sc}<div class="m">${esc(status(m))}</div>${canW?`<div style="text-align:right;margin-top:6px"><button data-a="del" data-v="${id}" style="padding:5px 12px;${delAsk===id?'background:#c62828;color:#fff;border-color:#c62828':''}">${delAsk===id?'Tap again to delete':'🗑 Delete'}</button></div>`:''}</div>`}).join('');
+ return`<div class="top"><h1>🏏 CricScore</h1><small>${fbOK?(user?'Signed in: '+esc(user.email):'Viewing only - anyone can view scores'):'Cloud not connected'}</small><div style="margin-top:6px">${user?'<button data-a="logout" style="padding:4px 10px">Sign out</button>':'<button data-a="loginshow" style="padding:4px 10px">🔑 Sign in to score</button>'}</div><small></small></div>
  ${canW?`${plPanel()}${bkPanel()}<div class="card"><b>New match</b><input id="ta" placeholder="Team A" value="${esc(fd.ta)}">${squadPick('a')}<textarea id="pa" rows="2" placeholder="New players for Team A (one per line) - also saved to your list">${esc(fd.pa)}</textarea><input id="tb" placeholder="Team B" value="${esc(fd.tb)}">${squadPick('b')}<textarea id="pb" rows="2" placeholder="New players for Team B (one per line) - also saved to your list">${esc(fd.pb)}</textarea><div class="row"><input id="ov" type="number" min="1" max="50" value="${esc(fd.ov)}" placeholder="Overs"><select id="bf"><option value="0"${fd.bf==='1'?'':' selected'}>Team A bats first</option><option value="1"${fd.bf==='1'?' selected':''}>Team B bats first</option></select></div><label class="pc"><input type="checkbox" id="lone"${fd.lone===false?'':' checked'}>Last batsman can bat alone (local rules)</label><button class="p" data-a="new" style="width:100%">Start match</button><div class="err">${esc(err)}</div></div>`:''}
- ${l||'<p class="m" style="text-align:center">No matches yet.</p>'}${l?`<button data-a="delall" style="width:100%;margin-top:4px;${delAsk==='all'?'background:#c62828;color:#fff;border-color:#c62828':''}">${delAsk==='all'?'Tap again to delete ALL matches':'🗑 Delete all matches'}</button><div class="m" style="text-align:center;margin-top:4px">Your players list is kept.</div>`:''}`}
+ ${l||'<p class="m" style="text-align:center">No matches yet.</p>'}${l&&canW?`<button data-a="delall" style="width:100%;margin-top:4px;${delAsk==='all'?'background:#c62828;color:#fff;border-color:#c62828':''}">${delAsk==='all'?'Tap again to delete ALL matches':'🗑 Delete all matches'}</button><div class="m" style="text-align:center;margin-top:4px">Your players list is kept.</div>`:''}`}
 function scoreTab(m){const i=last(m),c=calc(i),over=c.overs[Math.floor(c.L/6)];
  const fin=c.L>=m.ov*6||c.W>=lim(m,i)||!!status(m).match(/won|tied/);
  const chips=(over?over.b:[]).map(b=>`<span class="ball ${b.k?'w':b.r===4&&!b.x?'f':b.r===6&&!b.x?'s':b.x?'e':''}">${lab(b)}</span>`).join('');
  const st=c.bat[m.s],nst=c.bat[m.n],bl=sq(m,i.bat),fl=sq(m,1-i.bat),gone=Object.entries(c.bat).filter(([n,p])=>p.out&&p.out!=='retired hurt').map(x=>x[0]),sl=solo(m,i,c.W),miss=[!m.s&&'striker',!m.n&&!sl&&'non-striker',!m.bw&&(c.L>0&&c.L%6===0?'next bowler':'bowler')].filter(Boolean),nn=needNew(m,i,c.W+1);
- if(m.done||!canW)return`<div class="card">${chips||'<span class="m">Waiting for the next ball…</span>'}<div>${st?esc(m.s)+'* '+st.r+'('+st.b+')':''} ${nst?' · '+esc(m.n)+' '+nst.r+'('+nst.b+')':''}</div><div class="m">${m.bw?'Bowler: '+esc(m.bw):''}</div></div>`;
+ if(m.done||!canE(m))return`${user&&!m.done&&m.lk?`<div class="card"><b>${esc(m.lk.e||'Someone')} is scoring this match.</b><div class="m">Only one scorer at a time. Take over only if they have stopped.</div><button data-a="take" style="margin-top:6px">Take over scoring</button></div>`:''}<div class="card">${chips||'<span class="m">Waiting for the next ball…</span>'}<div>${st?esc(m.s)+'* '+st.r+'('+st.b+')':''} ${nst?' · '+esc(m.n)+' '+nst.r+'('+nst.b+')':''}</div><div class="m">${m.bw?'Bowler: '+esc(m.bw):''}</div></div>`;
  if(fin)return`<div class="card"><b>${m.inn.length<2?'Innings complete':esc(status(m))}</b><div class="row">${m.inn.length<2?'<button class="p" data-a="inn">Start 2nd innings</button>':'<button class="p" data-a="end">Finish match</button>'}<button data-a="undo">Undo last ball</button></div></div>`;
  return`<div class="card"><div style="margin-bottom:6px"><b>🏏 ${esc(m.s)||'—'}*</b> ${st?st.r+' ('+st.b+')':''} &nbsp;|&nbsp; ${esc(m.n)||(sl?'(batting alone)':'—')} ${nst?nst.r+' ('+nst.b+')':''}<div class="m">⚾ ${esc(m.bw)||'—'} ${c.bowl[m.bw]?ovs(c.bowl[m.bw].l)+'-'+c.bowl[m.bw].r+'-'+c.bowl[m.bw].w:''}</div></div>${pick('data-f="s"'+(m.s?'':' class="need"'),'Striker (on strike)',bl,m.s,[...gone,m.n])}${pick('data-f="n"'+(m.n||sl?'':' class="need"'),'Non-striker',bl,m.n,[...gone,m.s])}${pick('data-f="bw"'+(m.bw?'':' class="need"'),'Bowler (this over)',fl,m.bw,[])}
- <div class="m" style="margin-top:6px">This over:</div><div>${chips||'—'}</div>${miss.length?'<div class="err"><b>Select '+miss.join(', ')+' to continue scoring</b></div>':''}<div class="err">${esc(err)}</div>
+ <div class="m" style="margin-top:6px">This over:</div><div>${chips||'—'}</div>${ovMsg?'<div style="color:var(--g);margin:6px 0"><b>'+esc(ovMsg)+'</b></div>':''}${miss.length?'<div class="err"><b>Select '+miss.join(', ')+' to continue scoring</b></div>':''}<div class="err">${esc(err)}</div>
  <div class="row">${[['','Runs'],['wd','Wide'],['nb','No ball'],['b','Bye'],['lb','Leg bye']].map(([k,t])=>`<button class="${mod===k?'on':''}" data-a="mod" data-v="${k}">${t}</button>`).join('')}</div>
  <div class="row runs${miss.length?' dim':''}">${[0,1,2,3,4,5,6].map(n=>`<button data-a="run" data-v="${n}">${n}</button>`).join('')}</div>
  <div class="row"><button class="w" data-a="wk">OUT</button><button data-a="rt">Retire</button><button data-a="swap">⇄ Swap</button><button data-a="undo">Undo</button></div>
@@ -147,18 +154,28 @@ function cardTab(m){return m.inn.map(i=>{const c=calc(i);
  <table><tr><th>Bowler</th><th>O</th><th>R</th><th>W</th><th>Eco</th></tr>${Object.entries(c.bowl).map(([n,q])=>`<tr><td>${esc(n)}</td><td>${ovs(q.l)}</td><td>${q.r}</td><td><b>${q.w}</b></td><td>${q.l?(q.r*6/q.l).toFixed(1):'-'}</td></tr>`).join('')}</table></div>`}).join('')}
 function overTab(m){return m.inn.map(i=>{const c=calc(i);let t=0;
  return`<div class="card"><b>${esc(tn(m,i))}</b>${c.overs.map((o,k)=>{t+=o.r;return`<div style="margin-top:8px"><span class="m">Over ${k+1} · ${esc(o.bw)} · ${o.r} runs (total ${t})</span><div>${o.b.map(b=>`<span class="ball ${b.k?'w':b.r===4&&!b.x?'f':b.r===6&&!b.x?'s':b.x?'e':''}">${lab(b)}</span>`).join('')}</div></div>`}).join('')||'<div class="m">No balls yet</div>'}</div>`}).join('')}
-function render(){const a=$('#app');if(!cur||!M[cur]){cur=null;a.innerHTML=home();return}
+const loginView=()=>`<div class="top"><button data-a="loginhide" style="padding:4px 10px">←</button><h1>Sign in</h1><small>Only signed-in scorers can edit. Everyone can view.</small></div><div class="card"><input id="em" type="email" placeholder="Email" autocomplete="username" value="${esc(lem)}"><input id="pw" type="password" placeholder="Password" autocomplete="current-password"><button class="p" data-a="login" style="width:100%">Sign in</button>${window.FB_CONFIG&&window.FB_CONFIG.allowSignup?'<button data-a="signup" style="width:100%;margin-top:6px">Create account</button>':''}<div class="err">${esc(lerr)}</div></div>`;
+function render(){const a=$('#app');
+ if(!fbOK){a.innerHTML='<div class="top"><h1>🏏 CricScore</h1></div><div class="card"><b>Cloud is not set up yet</b><p class="m">Open <b>www/firebase-config.js</b> in your GitHub repository and paste your Firebase project values, then let the build run again.</p><div class="err">'+esc(err)+'</div></div>';return}
+ if(showLogin&&!user){a.innerHTML=loginView();return}if(!cur||!M[cur]){cur=null;a.innerHTML=home();return}
  const m=M[cur],i=last(m),c=calc(i);
  a.innerHTML=`<div class="top"><button data-a="back" style="padding:4px 10px">←</button><button data-a="pdf" style="padding:4px 10px;float:right">⬇ PDF</button> <small>${esc(m.a)} vs ${esc(m.b)} · ${m.ov} ov</small><div class="big">${esc(tn(m,i))} ${c.R}/${c.W}</div><small>Overs ${ovs(c.L)}${c.L?' · CRR '+(c.R*6/c.L).toFixed(2):''}</small><div><small>${esc(status(m))}</small></div></div>
  <div class="tabs">${[['live','Live'],['card','Scorecard'],['over','Overs']].map(([k,t])=>`<button class="${tab===k?'on':''}" data-a="tab" data-v="${k}">${t}</button>`).join('')}</div>${tab==='live'?scoreTab(m):tab==='card'?cardTab(m):overTab(m)}`}
-$('#app').addEventListener('click',e=>{const t=e.target.closest('[data-a]');if(!t)return;const a=t.dataset.a,v=t.dataset.v,m=M[cur];if(a!=='del'&&a!=='delall')delAsk='';
+$('#app').addEventListener('click',e=>{const t=e.target.closest('[data-a]');if(!t)return;const a=t.dataset.a,v=t.dataset.v,m=M[cur];if(a!=='del'&&a!=='delall')delAsk='';if(a==='open'||a==='undo'||a==='back')ovMsg='';
  if(m)document.querySelectorAll('#app [data-f]').forEach(el=>{m[el.dataset.f]=el.value});
- if(a==='open'){cur=v;tab='live';err='';render()}
- else if(a==='back'){cur=null;render()}
+ if(a==='open'){cur=v;tab='live';err='';if(user&&M[v]&&!M[v].done&&canE(M[v]))lock(v);render()}
+ else if(a==='back'){releaseLock();cur=null;render()}
+ else if(a==='take'){lock(cur);render()}
+ else if(a==='loginshow'){showLogin=true;lerr='';render()}
+ else if(a==='loginhide'){showLogin=false;render()}
+ else if(a==='login'||a==='signup'){lem=$('#em').value.trim();const pw=$('#pw').value;if(!lem||!pw){lerr='Enter email and password';return render()}
+  (a==='login'?auth.signInWithEmailAndPassword(lem,pw):auth.createUserWithEmailAndPassword(lem,pw)).then(()=>{lerr='';showLogin=false;render()}).catch(e=>{lerr=/credential|password|not-found|invalid/.test(e.code||'')?'Wrong email or password':(e.code||e.message);render()})}
+ else if(a==='logout'){releaseLock();auth.signOut()}
+ else if(a==='bkold'){const o=oldLocal();doImport(JSON.stringify({app:'cricscore',matches:o.m,players:o.p}))}
  else if(a==='tab'){tab=v;render()}
  else if(a==='new'){const A=$('#ta').value.trim(),B=$('#tb').value.trim(),o=+$('#ov').value;
   if(!A||!B||!(o>0)){err='Enter both team names and overs';return render()}
-  err='';const id='m'+Date.now(),f=+$('#bf').value,qa=[...new Set([...sel.a,...pl('#pa').map(canon)])],qb=[...new Set([...sel.b,...pl('#pb').map(canon)])];addPL(qa.concat(qb));sel={a:[],b:[]};fd={ta:'',tb:'',ov:'20',bf:'0',pa:'',pb:''};M[id]={lone:$('#lone').checked,sqa:qa,sqb:qb,a:A,b:B,ov:o,t:Date.now(),inn:[{bat:f,balls:[]}],s:'',n:'',bw:'',done:false};cur=id;tab='live';save();render()}
+  err='';const id='m'+Date.now(),f=+$('#bf').value,qa=[...new Set([...sel.a,...pl('#pa').map(canon)])],qb=[...new Set([...sel.b,...pl('#pb').map(canon)])];addPL(qa.concat(qb));sel={a:[],b:[]};fd={ta:'',tb:'',ov:'20',bf:'0',pa:'',pb:''};M[id]={lk:user?{u:user.uid,e:user.email,t:Date.now()}:null,lone:$('#lone').checked,sqa:qa,sqb:qb,a:A,b:B,ov:o,t:Date.now(),inn:[{bat:f,balls:[]}],s:'',n:'',bw:'',done:false};cur=id;tab='live';save();render()}
  else if(a==='mod'){mod=v;render()}
  else if(a==='run'){const n=+v;add(mk(n))}
  else if(a==='wk'){wk=!wk;rt=false;pw=Object.assign({},pw0);render()}
@@ -173,8 +190,8 @@ $('#app').addEventListener('click',e=>{const t=e.target.closest('[data-a]');if(!
  else if(a==='bkexp'){bkMsg='';exportData()}
  else if(a==='bkcopy'){const c=navigator.clipboard;(c&&c.writeText?c.writeText(bkJson()):Promise.reject()).then(()=>{bkMsg='Backup copied. Paste it on the other phone.';render()},()=>{bkMsg='Copy is not allowed here. Use Export file.';render()})}
  else if(a==='bkpaste'){doImport($('#bkt').value)}
- else if(a==='del'){if(delAsk===v){delete M[v];save();delAsk=''}else delAsk=v;render()}
- else if(a==='delall'){if(delAsk==='all'){M={};save();delAsk=''}else delAsk='all';render()}
+ else if(a==='del'){if(delAsk===v){delete M[v];fsDel(v);delAsk=''}else delAsk=v;render()}
+ else if(a==='delall'){if(delAsk==='all'){Object.keys(M).forEach(fsDel);M={};delAsk=''}else delAsk='all';render()}
  else if(a==='ptog'){showPL=!showPL;render()}
  else if(a==='padd'){addPL($('#np').value.split(/[\n,]/));render()}
  else if(a==='pdel'){PL=PL.filter(n=>n!==v);sel.a=sel.a.filter(n=>n!==v);sel.b=sel.b.filter(n=>n!==v);savePL();render()}
@@ -187,7 +204,13 @@ $('#app').addEventListener('change',e=>{const t=e.target,d=t.dataset;if(t.id==='
   const c=document.getElementById('cnt-'+d.t);if(c)c.textContent=sel[d.t].length+' selected';return}
  if(t.tagName==='SELECT'&&d.f){err='';render()}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden)save()});window.addEventListener('pagehide',()=>save());
-try{PL=JSON.parse(localStorage.getItem('cricscore_players')||'[]')}catch(x){PL=[]}
-try{M=JSON.parse(localStorage.getItem('cricscore')||'{}')}catch(x){M={}}
+M={};PL=[];
+{const cfg=window.FB_CONFIG;
+ if(cfg&&cfg.apiKey&&!/PASTE/.test(cfg.apiKey)&&window.firebase){try{firebase.initializeApp(cfg);auth=firebase.auth();db=firebase.firestore();try{db.enablePersistence({synchronizeTabs:false}).catch(()=>{})}catch(x){}fbOK=true;
+  const typing=()=>{const t=document.activeElement&&document.activeElement.tagName;return t==='INPUT'||t==='SELECT'||t==='TEXTAREA'};
+  auth.onAuthStateChanged(u=>{user=u;canW=!!u;if(u)showLogin=false;render()});
+  db.collection('matches').orderBy('t','desc').onSnapshot(sn=>{M={};sn.docs.forEach(d=>M[d.id]=d.data());if(!typing())render()},e=>{err='Cannot read cloud data: '+(e.code||e.message);render()});
+  db.doc('meta/players').onSnapshot(d=>{const x=d.exists?d.data():null;PL=x&&Array.isArray(x.list)?x.list:[];if(!cur&&!typing())render()},()=>{});
+ }catch(x){fbOK=false;err='Firebase error: '+x.message}}}
 render();
 </script></body></html>
