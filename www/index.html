@@ -174,7 +174,7 @@ function render(){const a=$('#app');
  const m=M[cur],i=last(m),c=calc(i);
  a.innerHTML=`<div class="top"><button data-a="back" style="padding:4px 10px">←</button><button data-a="pdf" style="padding:4px 10px;float:right">⬇ PDF</button> <small>${esc(m.a)} vs ${esc(m.b)} · ${m.ov} ov</small><div class="big">${esc(tn(m,i))} ${c.R}/${c.W}</div><small>Overs ${ovs(c.L)}${c.L?' · CRR '+(c.R*6/c.L).toFixed(2):''}</small><div><small>${esc(status(m))}</small></div></div>
  <div class="tabs">${[['live','Live'],['card','Scorecard'],['over','Overs']].map(([k,t])=>`<button class="${tab===k?'on':''}" data-a="tab" data-v="${k}">${t}</button>`).join('')}</div>${tab==='live'?scoreTab(m):tab==='card'?cardTab(m):overTab(m)}`}
-$('#app').addEventListener('click',e=>{const t=e.target.closest('[data-a]');if(!t)return;const a=t.dataset.a,v=t.dataset.v,m=M[cur];if(a!=='del'&&a!=='delall')delAsk='';if(a==='open'||a==='undo'||a==='back')ovMsg='';
+$('#app').addEventListener('click',e=>{const t=e.target.closest('[data-a]');if(!t)return;const a=t.dataset.a,v=t.dataset.v,m=M[cur];if(a!=='del'&&a!=='delall')delAsk='';if(a==='open'||a==='undo'||a==='back')ovMsg='';if(a==='open'||a==='back'||a==='new'||a==='inn'){mod='';wk=false;rt=false;pw=Object.assign({},pw0)}
  if(m)document.querySelectorAll('#app [data-f]').forEach(el=>{m[el.dataset.f]=el.value});
  if(a==='open'){cur=v;tab='live';err='';if(user&&M[v]&&!M[v].done&&canE(M[v]))lock(v);render()}
  else if(a==='back'){releaseLock();cur=null;render()}
@@ -187,8 +187,8 @@ $('#app').addEventListener('click',e=>{const t=e.target.closest('[data-a]');if(!
  else if(a==='bkold'){const o=oldLocal();doImport(JSON.stringify({app:'cricscore',matches:o.m,players:o.p}))}
  else if(a==='tab'){tab=v;render()}
  else if(a==='new'){const A=$('#ta').value.trim()||'Team A',B=$('#tb').value.trim()||'Team B',o=+$('#ov').value;
-  if(!A||!B||!(o>0)){err='Enter both team names and overs';return render()}
-  err='';const id='m'+Date.now(),f=+$('#bf').value,qa=[...new Set([...sel.a,...pl('#pa').map(canon)])],qb=[...new Set([...sel.b,...pl('#pb').map(canon)])];addPL(qa.concat(qb));sel={a:[],b:[]};fd={ta:'Team A',tb:'Team B',ov:'20',bf:'0',pa:'',pb:''};M[id]={lk:user?{u:user.uid,e:user.email,t:Date.now()}:null,lone:$('#lone').checked,sqa:qa,sqb:qb,a:A,b:B,ov:o,t:Date.now(),inn:[{bat:f,balls:[]}],s:'',n:'',bw:'',done:false};cur=id;tab='live';save();render()}
+  if(!A||!B||!(o>=1&&o<=50&&o===Math.floor(o))){err='Enter team names and whole overs from 1 to 50';return render()}
+  err='';const id='m'+Date.now(),f=+$('#bf').value,qa=[...new Set([...sel.a,...pl('#pa').map(canon)])],qb=[...new Set([...sel.b,...pl('#pb').map(canon)])];const dup=qa.find(n=>qb.includes(n));if(dup){err=dup+' is in both teams. A player can only be in one team.';return render()}addPL(qa.concat(qb));sel={a:[],b:[]};fd={ta:'Team A',tb:'Team B',ov:'20',bf:'0',pa:'',pb:''};M[id]={lk:user?{u:user.uid,e:user.email,t:Date.now()}:null,lone:$('#lone').checked,sqa:qa,sqb:qb,a:A,b:B,ov:o,t:Date.now(),inn:[{bat:f,balls:[]}],s:'',n:'',bw:'',done:false};cur=id;tab='live';save();render()}
  else if(a==='mod'){mod=v;render()}
  else if(a==='run'){const n=+v;add(mk(n))}
  else if(a==='wk'){wk=!wk;rt=false;pw=Object.assign({},pw0);render()}
